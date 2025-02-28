@@ -6,6 +6,7 @@ export class MainScene extends Phaser.Scene {
     private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
     private debugText?: Phaser.GameObjects.Text;
     private spaceKey?: Phaser.Input.Keyboard.Key;
+    private escKey?: Phaser.Input.Keyboard.Key;
     private cKey?: Phaser.Input.Keyboard.Key;
     private pKey?: Phaser.Input.Keyboard.Key;
     private iKey?: Phaser.Input.Keyboard.Key;
@@ -13,6 +14,9 @@ export class MainScene extends Phaser.Scene {
     private lKey?: Phaser.Input.Keyboard.Key;
     private fKey?: Phaser.Input.Keyboard.Key;
     private bKey?: Phaser.Input.Keyboard.Key;
+    private sKey?: Phaser.Input.Keyboard.Key;
+    private aKey?: Phaser.Input.Keyboard.Key;
+    private xKey?: Phaser.Input.Keyboard.Key;
     private background?: Phaser.GameObjects.Graphics;
     private mountain1?: Phaser.GameObjects.Polygon;
     private mountain2?: Phaser.GameObjects.Polygon;
@@ -28,6 +32,8 @@ export class MainScene extends Phaser.Scene {
     private furnacesInBoxes: number[] = [0, 0, 0, 0, 0]; // Track furnaces in each box
     private ironInBoxes: number[] = [0, 0, 0, 0, 0]; // Track iron in each box
     private steelInBoxes: number[] = [0, 0, 0, 0, 0]; // Track steel in each box
+    private armorInBoxes: number[] = [0, 0, 0, 0, 0]; // Track armor in each box
+    private swordInBoxes: number[] = [0, 0, 0, 0, 0]; // Track swords in each box
     private boxSprites: Phaser.Physics.Arcade.Sprite[] = []; // Store box sprites
     private woodTexts: Phaser.GameObjects.Text[] = []; // Store wood count texts
     private plankTexts: Phaser.GameObjects.Text[] = []; // Store plank count texts
@@ -37,11 +43,30 @@ export class MainScene extends Phaser.Scene {
     private furnaceTexts: Phaser.GameObjects.Text[] = []; // Store furnace count texts
     private ironTexts: Phaser.GameObjects.Text[] = []; // Store iron count texts
     private steelTexts: Phaser.GameObjects.Text[] = []; // Store steel count texts
+    private armorTexts: Phaser.GameObjects.Text[] = []; // Store armor count texts
+    private swordTexts: Phaser.GameObjects.Text[] = []; // Store sword count texts
     private lastPressTime: number = 0; // To prevent rapid crafting
     private lastTreeTime: number = 0;
+    private playerHP: number = 100;
+    private maxPlayerHP: number = 100;
+    private hpText?: Phaser.GameObjects.Text;
+    private hpBar?: Phaser.GameObjects.Graphics;
+    private zombies: Phaser.Physics.Arcade.Group;
+    private lastZombieSpawnTime: number = 0;
+    private zombieSpawnInterval: number = 15000; // Spawn zombie every 15 seconds
+    private playerHasArmor: boolean = false;
+    private lastAttackTime: number = 0;
+    private attackCooldown: number = 500; // 500ms cooldown between attacks
+    private lastDamageTime: number = 0;
+    private damageInvincibilityTime: number = 1000; // 1 second of invincibility after taking damage
+    private worldName: string = '';
 
     constructor() {
         super({ key: 'MainScene' });
+    }
+
+    init(data: { worldName?: string }) {
+        this.worldName = data.worldName || '';
     }
 
     createMountainSteps(startX: number, startY: number, endX: number, endY: number, numSteps: number) {
@@ -170,6 +195,34 @@ export class MainScene extends Phaser.Scene {
         graphics.lineBetween(12, 4, 12, 20);
         graphics.generateTexture('steel', 24, 24);
         graphics.clear();
+
+        // Create armor texture (24x24)
+        graphics.fillStyle(0x1E90FF); // Bright steel blue for armor
+        graphics.fillRect(0, 0, 24, 24);
+        graphics.lineStyle(2, 0x4169E1); // Royal blue details
+        graphics.strokeRect(4, 4, 16, 16); // Chest plate outline
+        graphics.lineBetween(8, 8, 16, 8); // Armor detail
+        graphics.generateTexture('armor', 24, 24);
+        graphics.clear();
+
+        // Create sword texture (24x24)
+        graphics.fillStyle(0x4682B4); // Steel blue color for blade
+        graphics.fillRect(8, 0, 8, 20); // Blade
+        graphics.fillStyle(0x8B4513); // Brown for handle
+        graphics.fillRect(6, 16, 12, 8); // Handle
+        graphics.generateTexture('sword', 24, 24);
+        graphics.clear();
+
+        // Create zombie texture (32x32)
+        graphics.fillStyle(0x2D5A27); // Dark green for zombie body
+        graphics.fillRect(0, 0, 32, 32);
+        graphics.fillStyle(0xFF0000); // Red eyes
+        graphics.fillRect(8, 8, 6, 6);
+        graphics.fillRect(18, 8, 6, 6);
+        graphics.fillStyle(0x8B0000); // Dark red for mouth
+        graphics.fillRect(8, 20, 16, 4);
+        graphics.generateTexture('zombie', 32, 32);
+        graphics.clear();
     }
 
     create() {
@@ -269,6 +322,24 @@ export class MainScene extends Phaser.Scene {
                 });
                 steelText.setOrigin(0.5);
                 this.steelTexts.push(steelText);
+
+                // Add armor counter text (below steel)
+                const armorText = this.add.text(startX + (i * boxSize), boxY + boxSize/2 + 75, '', {
+                    fontSize: '24px',
+                    color: '#1E90FF',
+                    backgroundColor: '#FFFFFF'
+                });
+                armorText.setOrigin(0.5);
+                this.armorTexts.push(armorText);
+
+                // Add sword counter text (below armor)
+                const swordText = this.add.text(startX + (i * boxSize), boxY + boxSize/2 + 90, '', {
+                    fontSize: '24px',
+                    color: '#4682B4',
+                    backgroundColor: '#FFFFFF'
+                });
+                swordText.setOrigin(0.5);
+                this.swordTexts.push(swordText);
             }
         }
 
@@ -361,6 +432,7 @@ export class MainScene extends Phaser.Scene {
         // Set up keyboard controls
         this.cursors = this.input.keyboard.createCursorKeys();
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        this.escKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
         this.cKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.C);
         this.pKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.P);
         this.iKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.I);
@@ -368,6 +440,9 @@ export class MainScene extends Phaser.Scene {
         this.lKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
         this.fKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
         this.bKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+        this.sKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+        this.aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+        this.xKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
 
         // Add debug text
         this.debugText = this.add.text(16, 16, 'Debug info...', {
@@ -375,6 +450,28 @@ export class MainScene extends Phaser.Scene {
             color: '#fff',
             backgroundColor: '#000'
         });
+
+        // Create zombies group
+        this.zombies = this.physics.add.group();
+        
+        // Create HP text display with larger font
+        this.hpText = this.add.text(16, 16, `HP: ${this.playerHP}/${this.maxPlayerHP}`, {
+            fontSize: '24px',
+            color: '#fff',
+            backgroundColor: '#000',
+            padding: { x: 10, y: 5 }
+        });
+        this.hpText.setDepth(100); // Make sure it's always visible on top
+
+        // Create HP bar
+        this.hpBar = this.add.graphics();
+        this.updateHPBar();
+
+        // Add collision between zombies and platforms
+        this.physics.add.collider(this.zombies, this.platforms);
+        
+        // Add collision between player and zombies
+        this.physics.add.collider(this.player, this.zombies, this.handleZombieCollision, undefined, this);
     }
 
     private createSingleTree(x: number, y: number) {
@@ -391,16 +488,17 @@ export class MainScene extends Phaser.Scene {
         const trunk = this.physics.add.staticImage(x, y + 24, 'ground');
         trunk.setDisplaySize(16 * scale, 16 * scale);
         trunk.setTint(0x795548);
+        trunk.setAlpha(0); // Make collision box invisible
         trunk.refreshBody();
 
         const topLower = this.physics.add.staticImage(x, y + 8, 'ground');
         topLower.setDisplaySize(48 * scale, 16 * scale);
-        topLower.setAlpha(0.5);
+        topLower.setAlpha(0); // Make collision box invisible
         topLower.refreshBody();
 
         const topUpper = this.physics.add.staticImage(x, y - 16, 'ground');
         topUpper.setDisplaySize(32 * scale, 16 * scale);
-        topUpper.setAlpha(0.5);
+        topUpper.setAlpha(0); // Make collision box invisible
         topUpper.refreshBody();
 
         // Add colliders
@@ -546,15 +644,15 @@ export class MainScene extends Phaser.Scene {
                         if (this.stoneInBoxes[nextBox] > 64) this.stoneInBoxes[nextBox] = 64;
                         this.stoneTexts[nextBox].setText(this.stoneInBoxes[nextBox] > 0 ? this.stoneInBoxes[nextBox].toString() : '');
 
-                        // 30% chance to get coal
-                        if (Math.random() < 0.3 && this.coalInBoxes[nextBox] < 64) {
+                        // 50% chance to get coal
+                        if (Math.random() < 0.5 && this.coalInBoxes[nextBox] < 64) {
                             this.coalInBoxes[nextBox] += 1;
                             if (this.coalInBoxes[nextBox] > 64) this.coalInBoxes[nextBox] = 64;
                             this.coalTexts[nextBox].setText(this.coalInBoxes[nextBox] > 0 ? this.coalInBoxes[nextBox].toString() : '');
                         }
 
-                        // 25% chance to get iron
-                        if (Math.random() < 0.25 && this.ironInBoxes[nextBox] < 64) {
+                        // 40% chance to get iron
+                        if (Math.random() < 0.4 && this.ironInBoxes[nextBox] < 64) {
                             this.ironInBoxes[nextBox] += 1;
                             if (this.ironInBoxes[nextBox] > 64) this.ironInBoxes[nextBox] = 64;
                             this.ironTexts[nextBox].setText(this.ironInBoxes[nextBox] > 0 ? this.ironInBoxes[nextBox].toString() : '');
@@ -635,6 +733,78 @@ export class MainScene extends Phaser.Scene {
         }
     }
 
+    private craftArmor() {
+        const currentTime = this.time.now;
+        if (currentTime - this.lastPressTime < 500) return; // Prevent rapid crafting
+        this.lastPressTime = currentTime;
+
+        // Find first box with enough steel for armor
+        for (let i = 0; i < this.steelInBoxes.length; i++) {
+            if (this.steelInBoxes[i] >= 2 && this.armorInBoxes[i] < 64) {
+                // Convert 2 steel to 1 armor in the same box
+                this.steelInBoxes[i] -= 2;
+                this.armorInBoxes[i] += 1;
+
+                // Update steel counter
+                if (this.steelTexts[i]) {
+                    this.steelTexts[i].setText(this.steelInBoxes[i] > 0 ? this.steelInBoxes[i].toString() : '');
+                }
+
+                // Update armor counter
+                if (this.armorTexts[i]) {
+                    this.armorTexts[i].setText(this.armorInBoxes[i] > 0 ? this.armorInBoxes[i].toString() : '');
+                }
+
+                // Update box color
+                this.updateBoxColor(i);
+
+                // Add armor effect when crafted
+                if (!this.playerHasArmor) {
+                    this.playerHasArmor = true;
+                    this.maxPlayerHP = 150; // Increase max HP with armor
+                    this.playerHP = Math.min(this.playerHP + 50, this.maxPlayerHP); // Heal when putting on armor
+                    if (this.hpText) {
+                        this.hpText.setText(`HP: ${this.playerHP}/${this.maxPlayerHP}`);
+                    }
+                    this.updateHPBar();
+                    if (this.player) {
+                        this.player.setTint(0x1E90FF); // Blue tint when wearing armor
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    private craftSword() {
+        const currentTime = this.time.now;
+        if (currentTime - this.lastPressTime < 500) return; // Prevent rapid crafting
+        this.lastPressTime = currentTime;
+
+        // Find first box with enough steel for a sword
+        for (let i = 0; i < this.steelInBoxes.length; i++) {
+            if (this.steelInBoxes[i] >= 1 && this.swordInBoxes[i] < 64) {
+                // Convert 1 steel to 1 sword in the same box
+                this.steelInBoxes[i] -= 1;
+                this.swordInBoxes[i] += 1;
+
+                // Update steel counter
+                if (this.steelTexts[i]) {
+                    this.steelTexts[i].setText(this.steelInBoxes[i] > 0 ? this.steelInBoxes[i].toString() : '');
+                }
+
+                // Update sword counter
+                if (this.swordTexts[i]) {
+                    this.swordTexts[i].setText(this.swordInBoxes[i] > 0 ? this.swordInBoxes[i].toString() : '');
+                }
+
+                // Update box color
+                this.updateBoxColor(i);
+                break;
+            }
+        }
+    }
+
     private updateBoxColor(index: number) {
         if (this.boxSprites[index]) {
             const woodFull = this.woodInBoxes[index] >= 64;
@@ -645,6 +815,8 @@ export class MainScene extends Phaser.Scene {
             const furnacesFull = this.furnacesInBoxes[index] >= 64;
             const ironFull = this.ironInBoxes[index] >= 64;
             const steelFull = this.steelInBoxes[index] >= 64;
+            const armorFull = this.armorInBoxes[index] >= 64;
+            const swordFull = this.swordInBoxes[index] >= 64;
             const hasWood = this.woodInBoxes[index] > 0;
             const hasPlanks = this.planksInBoxes[index] > 0;
             const hasPickaxes = this.pickaxesInBoxes[index] > 0;
@@ -653,9 +825,15 @@ export class MainScene extends Phaser.Scene {
             const hasFurnaces = this.furnacesInBoxes[index] > 0;
             const hasIron = this.ironInBoxes[index] > 0;
             const hasSteel = this.steelInBoxes[index] > 0;
+            const hasArmor = this.armorInBoxes[index] > 0;
+            const hasSword = this.swordInBoxes[index] > 0;
             
-            if (woodFull && planksFull && pickaxesFull && stoneFull && coalFull && furnacesFull && ironFull && steelFull) {
+            if (woodFull && planksFull && pickaxesFull && stoneFull && coalFull && furnacesFull && ironFull && steelFull && armorFull && swordFull) {
                 this.boxSprites[index].setTint(0x4A0404); // Very dark red (full everything)
+            } else if (swordFull) {
+                this.boxSprites[index].setTint(0x4682B4); // Steel blue for swords
+            } else if (armorFull) {
+                this.boxSprites[index].setTint(0x1E90FF); // Bright steel blue for armor
             } else if (steelFull) {
                 this.boxSprites[index].setTint(0x4682B4); // Steel blue for steel
             } else if (ironFull) {
@@ -721,10 +899,178 @@ export class MainScene extends Phaser.Scene {
         }
     }
 
+    private updateHPBar() {
+        if (!this.hpBar) return;
+        
+        this.hpBar.clear();
+        
+        // Background of health bar (dark red)
+        this.hpBar.fillStyle(0x660000);
+        this.hpBar.fillRect(16, 50, 200, 20);
+        
+        // Calculate health percentage
+        const healthPercent = this.playerHP / this.maxPlayerHP;
+        
+        // Foreground of health bar (bright red/green based on health)
+        const color = healthPercent > 0.5 ? 0x00ff00 : healthPercent > 0.25 ? 0xffff00 : 0xff0000;
+        this.hpBar.fillStyle(color);
+        this.hpBar.fillRect(16, 50, 200 * healthPercent, 20);
+        
+        // Border of health bar
+        this.hpBar.lineStyle(2, 0xffffff);
+        this.hpBar.strokeRect(16, 50, 200, 20);
+        
+        this.hpBar.setDepth(100); // Make sure it's always visible on top
+    }
+
+    private handleZombieCollision(player: Phaser.GameObjects.GameObject, zombie: Phaser.GameObjects.GameObject) {
+        const currentTime = this.time.now;
+        if (currentTime - this.lastDamageTime < this.damageInvincibilityTime) {
+            return; // Still invincible, don't take damage
+        }
+        
+        this.lastDamageTime = currentTime;
+        
+        if (!this.playerHasArmor) {
+            this.playerHP -= 10; // Take 10 damage without armor
+        } else {
+            this.playerHP -= 5; // Take 5 damage with armor
+        }
+        
+        if (this.playerHP <= 0) {
+            this.playerHP = 0;
+            // Restart the scene when player dies
+            this.scene.restart();
+        }
+        
+        if (this.hpText) {
+            this.hpText.setText(`HP: ${this.playerHP}/${this.maxPlayerHP}`);
+        }
+        this.updateHPBar();
+
+        // Flash the player red when taking damage
+        if (this.player && 'setTint' in this.player) {
+            this.player.setTint(0xFF0000);
+            this.time.delayedCall(200, () => {
+                if (this.player && 'clearTint' in this.player) {
+                    if (this.playerHasArmor) {
+                        this.player.setTint(0x1E90FF); // Return to blue if has armor
+                    } else {
+                        this.player.clearTint(); // Return to normal if no armor
+                    }
+                }
+            });
+        }
+    }
+
+    private spawnZombie() {
+        // Spawn zombie at random edge of the screen
+        const side = Math.random() > 0.5 ? 'left' : 'right';
+        const x = side === 'left' ? 50 : 750;
+        const y = 450; // Spawn on ground level
+        
+        const zombie = this.zombies.create(x, y, 'zombie') as Phaser.Physics.Arcade.Sprite;
+        zombie.setTint(0x00FF00); // Make zombie green
+        zombie.setBounce(0.1);
+        zombie.setCollideWorldBounds(true);
+        
+        // Set zombie movement towards player
+        const zombieSpeed = 50;
+        zombie.setVelocityX(side === 'left' ? zombieSpeed : -zombieSpeed);
+    }
+
+    private attackZombies() {
+        if (!this.player) return;
+        
+        const currentTime = this.time.now;
+        if (currentTime - this.lastAttackTime < this.attackCooldown) return; // Check attack cooldown
+        this.lastAttackTime = currentTime;
+
+        const attackRange = 50; // Attack range in pixels
+        const playerX = this.player.x;
+        const playerY = this.player.y;
+
+        // Create a temporary visual effect for the attack
+        const attackEffect = this.add.rectangle(
+            playerX + (this.player.flipX ? -25 : 25), 
+            playerY, 
+            50, 
+            50, 
+            0xFF0000, 
+            0.5
+        );
+
+        // Fade out and destroy the attack effect
+        this.tweens.add({
+            targets: attackEffect,
+            alpha: 0,
+            duration: 200,
+            onComplete: () => attackEffect.destroy()
+        });
+
+        // Keep track of zombies to destroy
+        const zombiesToDestroy: Phaser.Physics.Arcade.Sprite[] = [];
+
+        // Check each zombie for collision with attack
+        this.zombies.children.iterate((zombie: any) => {
+            const zombieSprite = zombie as Phaser.Physics.Arcade.Sprite;
+            const distance = Phaser.Math.Distance.Between(
+                playerX, 
+                playerY,
+                zombieSprite.x, 
+                zombieSprite.y
+            );
+
+            // Check if zombie is in attack range and in front of player
+            const isInFront = this.player?.flipX ? 
+                zombieSprite.x <= playerX : 
+                zombieSprite.x >= playerX;
+
+            if (distance <= attackRange && isInFront) {
+                zombiesToDestroy.push(zombieSprite);
+            }
+            return false; // Keep iterating
+        });
+
+        // Create death effects and destroy zombies
+        zombiesToDestroy.forEach(zombie => {
+            // Create a death effect
+            const deathEffect = this.add.rectangle(
+                zombie.x,
+                zombie.y,
+                32,
+                32,
+                0x00FF00,
+                0.7
+            );
+
+            // Fade out and destroy both the zombie and the effect
+            this.tweens.add({
+                targets: [zombie, deathEffect],
+                alpha: 0,
+                duration: 200,
+                onComplete: () => {
+                    zombie.destroy();
+                    deathEffect.destroy();
+                }
+            });
+        });
+    }
+
     update() {
-        if (!this.cursors || !this.player || !this.debugText || !this.spaceKey || 
+        if (!this.cursors || !this.player || !this.spaceKey || !this.escKey ||
             !this.mountain1 || !this.mountain2 || !this.duck || !this.splashSprite || 
-            !this.cKey || !this.pKey || !this.iKey || !this.mKey || !this.lKey || !this.fKey || !this.bKey) return;
+            !this.cKey || !this.pKey || !this.iKey || !this.mKey || !this.lKey || 
+            !this.fKey || !this.bKey || !this.sKey || !this.hpText || !this.aKey || !this.xKey) return;
+
+        // Handle ESC key to return to menu
+        if (this.escKey.isDown) {
+            this.scene.start('MenuScene', { 
+                showNamePrompt: true,
+                worldName: this.worldName
+            });
+            return;
+        }
 
         const body = this.player.body as Phaser.Physics.Arcade.Body;
 
@@ -815,11 +1161,18 @@ export class MainScene extends Phaser.Scene {
             }
         }
 
+        // Handle attacking
+        if (this.aKey.isDown) {
+            this.attackZombies();
+        }
+
         // Handle horizontal movement
         if (this.cursors.left.isDown) {
             this.player.setVelocityX(-160);
+            this.player.setFlipX(true);
         } else if (this.cursors.right.isDown) {
             this.player.setVelocityX(160);
+            this.player.setFlipX(false);
         } else {
             this.player.setVelocityX(0);
         }
@@ -859,9 +1212,19 @@ export class MainScene extends Phaser.Scene {
             this.craftSteel();
         }
 
-        // Check if it's time to create a new tree (every 30 seconds)
+        // Handle armor crafting
+        if (this.sKey.isDown) {
+            this.craftArmor();
+        }
+
+        // Handle sword crafting
+        if (this.xKey.isDown) {
+            this.craftSword();
+        }
+
+        // Check if it's time to create a new tree (every 10 seconds)
         const currentTime = this.time.now;
-        if (currentTime - this.lastTreeTime >= 30000) { // 30000ms = 30 seconds
+        if (currentTime - this.lastTreeTime >= 10000) { // 10000ms = 10 seconds
             // Generate a random x position that's not too close to mountains or pond
             let x;
             do {
@@ -875,6 +1238,25 @@ export class MainScene extends Phaser.Scene {
             this.createSingleTree(x, 550);
             this.lastTreeTime = currentTime;
         }
+
+        // Spawn zombies periodically
+        if (currentTime - this.lastZombieSpawnTime >= this.zombieSpawnInterval) {
+            this.spawnZombie();
+            this.lastZombieSpawnTime = currentTime;
+        }
+
+        // Update zombie movement
+        this.zombies.children.iterate((zombie: any) => {
+            if (!this.player) return;
+            
+            // Make zombies move towards player
+            const zombieSprite = zombie as Phaser.Physics.Arcade.Sprite;
+            if (zombieSprite.x < this.player.x) {
+                zombieSprite.setVelocityX(50);
+            } else {
+                zombieSprite.setVelocityX(-50);
+            }
+        });
 
         // Update debug text with mountain and pond info
         this.debugText.setText([
