@@ -3,23 +3,19 @@ import { MainScene } from './scenes/MainScene';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
-    parent: 'game-container',
-    width: 800,
-    height: 600,
+    backgroundColor: '#87CEEB',
     physics: {
         default: 'arcade',
         arcade: {
             gravity: { y: 300 },
-            debug: true // We can set this to false later
+            debug: true
         }
     },
     scene: MainScene,
-    backgroundColor: '#87CEEB', // Sky blue background
+    transparent: false,
+    clearBeforeRender: true,
     render: {
-        pixelArt: true
-    },
-    scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        pixelArt: false,
+        antialias: true
     }
 }; 
