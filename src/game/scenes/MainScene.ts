@@ -4,7 +4,6 @@ export class MainScene extends Phaser.Scene {
     private platforms?: Phaser.Physics.Arcade.StaticGroup;
     private player?: Phaser.Physics.Arcade.Sprite;
     private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
-    private debugText?: Phaser.GameObjects.Text;
     private spaceKey?: Phaser.Input.Keyboard.Key;
     private escKey?: Phaser.Input.Keyboard.Key;
     private cKey?: Phaser.Input.Keyboard.Key;
@@ -443,13 +442,6 @@ export class MainScene extends Phaser.Scene {
         this.sKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
         this.aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
         this.xKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
-
-        // Add debug text
-        this.debugText = this.add.text(16, 16, 'Debug info...', {
-            fontSize: '18px',
-            color: '#fff',
-            backgroundColor: '#000'
-        });
 
         // Create zombies group
         this.zombies = this.physics.add.group();
@@ -1257,18 +1249,6 @@ export class MainScene extends Phaser.Scene {
                 zombieSprite.setVelocityX(-50);
             }
         });
-
-        // Update debug text with mountain and pond info
-        this.debugText.setText([
-            `Player x: ${Math.floor(this.player.x)}`,
-            `Player y: ${Math.floor(this.player.y)}`,
-            `In mountain 1: ${inMountain1}`,
-            `In mountain 2: ${inMountain2}`,
-            `In pond: ${inPond}`,
-            `On ground: ${body.touching.down}`,
-            `Space pressed: ${this.spaceKey.isDown}`,
-            `Can jump: ${body.touching.down && this.spaceKey.isDown}`
-        ].join('\n'));
     }
 
     private isInPond(x: number, y: number): boolean {
